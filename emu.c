@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define WINDOW_W 1024
-#define WINDOW_H 1024
-#define W 256
+
+#define W 224
 #define H 256
+#define PIXEL_SCALE 4
+#define WINDOW_W (W*PIXEL_SCALE)
+#define WINDOW_H (H*PIXEL_SCALE)
 
 typedef uint8_t bool_t;
 #define TRUE 1
@@ -156,8 +158,8 @@ void init_sprites() {
 void init_player_sprite() {
 	Sprite_t* player = &sprite[SPRITE_PLAYER];
 	player->enable = 1;
-	player->x = 128;
-	player->y = 248;
+	player->x = W/2;
+	player->y = H-8;
 	player->color = PLAYER_COLOR;
 	player->idx = 2;
 }
@@ -173,7 +175,7 @@ void init() {
 		for (uint8_t i = 0; i < ENEMY_COLS; i++) {
 			Sprite_t* spr = &sprite[j*ENEMY_COLS+i];
 			spr->enable = 1;
-			spr->x = 16 + i*20;
+			spr->x = 16 + i*16;
 			spr->y = 64 + j*16;
 			spr->idx = 0;
 			spr->color = j*8+21;
