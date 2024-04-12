@@ -367,7 +367,7 @@ void draw_sprites() {
 	}
 }
 
-SDL_GameController *findController() {
+SDL_GameController *find_controller() {
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
             return SDL_GameControllerOpen(i);
@@ -377,6 +377,24 @@ SDL_GameController *findController() {
 }
 
 
+#define PI2 6.28318530718
+static float duration = 0;
+static float freq = 440;
+
+void audio_callback(void *userdata, Uint8 *stream, int len)
+{
+	//printf("Audio callback %d\n", len);
+	short *snd = (short*)stream;
+	len /= sizeof(*snd);
+	for (int i = 0; i < len; i++)
+	{
+		snd[i] = 32000 * sin(duration);
+
+		duration += freq * PI2 / 48000.0;
+		if (duration >= PI2)
+			duration -= PI2;
+	}
+}
 
 // see https://benedicthenshaw.com/soft_render_sdl2.html
 // (how to do software rendering in SDL2)
@@ -386,7 +404,7 @@ extern int main(int argc, char** argv) {
 	SDL_Surface* surface = 0;
 	SDL_Texture* texture = 0;
 
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) < 0) {
 		printf("Failed to initalize SDL: %s\n", SDL_GetError());
 		return 0;
 	}
@@ -416,7 +434,28 @@ extern int main(int argc, char** argv) {
 		printf("Failed to enable game controller events: %s\n", SDL_GetError());
 		return 0;
 	}
-	SDL_GameController *controller = findController();
+	SDL_GameController *controller = find_controller();
+
+	SDL_AudioSpec spec, aspec;
+	SDL_zero(spec);
+	spec.freq = 48000;
+	spec.format = AUDIO_S16SYS;
+	spec.channels = 1;
+	spec.samples = 4096;
+	spec.callback = audio_callback;
+	spec.userdata = NULL;
+
+	int audio;
+	if ((audio = SDL_OpenAudioDevice(NULL, 0, &spec, &aspec, 0)) <= 0)
+	{
+		fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
+		exit(-1);
+	} else {
+		printf("%d %d (%d) %d %d\n", aspec.freq, aspec.format, AUDIO_S16SYS, aspec.channels, aspec.samples);
+	}
+
+	/* Start playing, "unpause" */
+	SDL_PauseAudioDevice(audio, 0);
 
 	init_palette();
 	init_sprites();
