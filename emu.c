@@ -80,6 +80,15 @@ const uint8_t SPRITE_DATA[][SPRITE_DIM] = {
 		0b00001000,
 		0b00010000,
 		0b00001000,
+	}, { // explosion
+		0b01000010,
+		0b00100100,
+		0b10000001,
+		0b01000010,
+		0b01000010,
+		0b10000001,
+		0b00100100,
+		0b01000010
 	}
 };
 
@@ -124,6 +133,8 @@ typedef struct {
 } Timer_t;
 static Timer_t timer[N_TIMERS];
 #define TIMER_RETURN_SHOT 0
+#define TIMER_CLEAR_EXPLOSIONS 1
+#define TIMER_RESTORE_PLAYER 2
 
 static int enemies;
 static int enemy_dir;
@@ -141,6 +152,17 @@ void init_sprites() {
 	}
 }
 
+
+void init_player_sprite() {
+	Sprite_t* player = &sprite[SPRITE_PLAYER];
+	player->enable = 1;
+	player->x = 128;
+	player->y = 248;
+	player->color = PLAYER_COLOR;
+	player->idx = 2;
+}
+
+
 void init() {
 	ticks = 0;
 	init_timers();
@@ -151,26 +173,21 @@ void init() {
 		for (uint8_t i = 0; i < ENEMY_COLS; i++) {
 			Sprite_t* spr = &sprite[j*ENEMY_COLS+i];
 			spr->enable = 1;
-			spr->x = 16 + i*16;
+			spr->x = 16 + i*20;
 			spr->y = 64 + j*16;
 			spr->idx = 0;
-			spr->color = j*8+20;
+			spr->color = j*8+21;
 		}
 	}
 	lives = 3;
-	Sprite_t* player = &sprite[SPRITE_PLAYER];
-	player->enable = 1;
-	player->x = 128;
-	player->y = 248;
-	player->color = PLAYER_COLOR;
-	player->idx = 2;
+	init_player_sprite();
 }
 
 
 static void update_enemies() {
-	// Speed up as # enemies decreases/
+	// Speed up as # enemies decreases.
 	// In the original, only one enemy was moved per frame,
-	// and the speed-up was a side-effect of that
+	// like a Mexican wave. The speed-up was a consequence of that.
 	if (ticks % enemies == 0) {
 		bool_t advance = FALSE;
 		uint8_t xl = 255;
@@ -191,7 +208,9 @@ static void update_enemies() {
 		for (uint8_t j = 0; j < ENEMY_ROWS; j++) {
 			for (uint8_t i = 0; i < ENEMY_COLS; i++) {
 				Sprite_t* spr = &sprite[j*ENEMY_COLS+i];
-				spr->idx = (spr->idx + 1) % 2;
+				if (spr->idx <= 1) {
+					spr->idx = (spr->idx + 1) % 2;
+				}
 
 				if (advance) {
 					spr->y += 2;
@@ -207,24 +226,35 @@ static bool_t check_sprite_collision(int i, int j, int ir, int il) {
 	const Sprite_t *si, *sj;
 	si = &sprite[i];
 	sj = &sprite[j];
-	return (si->x+ir >= sj->x)
+	return si->enable && sj->enable &&
+		(si->x+ir >= sj->x)
 		&& (sj->x+SPRITE_DIM >= si->x+il)
 		&& (si->y+SPRITE_DIM >= sj->y)
 		&& (sj->y+SPRITE_DIM >= si->y);
 }
 
+static void clear_explosions() {
+	for (int i = 0; i < N_ENEMIES; i++) {
+		if (sprite[i].idx == 5) {
+			sprite[i].enable = FALSE;
+		}
+	}
+}
+
 static void update_player_shot() {
-	if (sprite[SPRITE_PLAYER_SHOT].y < SHOT_SPEED) {
-		sprite[SPRITE_PLAYER_SHOT].enable = FALSE;
+	Sprite_t* spr_player = &sprite[SPRITE_PLAYER_SHOT];
+	if (spr_player->y < SHOT_SPEED) {
+		spr_player->enable = FALSE;
 	}
 	sprite[SPRITE_PLAYER_SHOT].y -= SHOT_SPEED;
 
 	for (int i = 0; i < N_ENEMIES; i++) {
 		if (sprite[i].enable && check_sprite_collision(SPRITE_PLAYER_SHOT, i, 3, 5)) {
-			sprite[i].enable = FALSE;
 			sprite[SPRITE_PLAYER_SHOT].enable = FALSE;
 			enemies--;
-			// TODO: explosion
+			sprite[i].idx = 5;
+			timer[TIMER_CLEAR_EXPLOSIONS].t = 20;
+			timer[TIMER_CLEAR_EXPLOSIONS].callback = &clear_explosions;
 		}
 	}
 }
@@ -244,15 +274,17 @@ static int find_nearest_enemy_index() {
 }
 
 static void update_enemy_shots() {
-	if (sprite[SPRITE_ENEMY_RETURN_SHOT].y >= H - SHOT_SPEED) {
-		sprite[SPRITE_ENEMY_RETURN_SHOT].enable = FALSE;
+	Sprite_t *shot = &sprite[SPRITE_ENEMY_RETURN_SHOT];
+	if (shot->y >= H - SHOT_SPEED) {
+		shot->enable = FALSE;
 	}
-	sprite[SPRITE_ENEMY_RETURN_SHOT].y += SHOT_SPEED;
+	shot->y += SHOT_SPEED;
 
-	if (check_sprite_collision(SPRITE_ENEMY_RETURN_SHOT, SPRITE_PLAYER, 3, 5)) {
-		sprite[SPRITE_PLAYER].enable = FALSE;
-		// TODO: explosion
-		// decrement lives
+	if (shot->enable && check_sprite_collision(SPRITE_ENEMY_RETURN_SHOT, SPRITE_PLAYER, 3, 5)) {
+		sprite[SPRITE_PLAYER].idx = 5;
+		timer[TIMER_RESTORE_PLAYER].t = 20;
+		timer[TIMER_RESTORE_PLAYER].callback = &init_player_sprite;
+		lives--;
 	}
 }
 
@@ -305,7 +337,9 @@ static void update() {
 	}
 	update_enemy_shots();
 
-	handle_inputs();
+	if (sprite[SPRITE_PLAYER].idx != 5) { // as long as the player isn't exploding
+		handle_inputs();
+	}
 	ticks++;
 	handle_timers();
 }
