@@ -125,6 +125,7 @@ static uint8_t joyport;
 
 static int lives;
 
+// frame counter
 typedef unsigned int Tick_t;
 static Tick_t ticks;
 
@@ -153,6 +154,38 @@ void init_sprites() {
 		sprite[i].enable = FALSE;
 	}
 }
+
+typedef enum {
+	NONE,
+	NOISE,
+	SQUARE
+} Waveform_t;
+
+typedef struct {
+	float f_start;
+	float f_decay;
+	float a_start;
+	float a_decay;
+	Waveform_t waveform;
+
+	int i;
+	float f_current;
+	float a_current;
+} Sound_t;
+
+Sound_t sound;
+
+static void play_sound(Waveform_t waveform, float f_start, float f_decay, float a_start, float a_decay) {
+	sound.i = 0;
+	sound.waveform = waveform;
+	sound.f_start = f_start;
+	sound.f_decay = f_decay;
+	sound.a_start = a_start;
+	sound.a_decay = a_decay;
+	sound.f_current = sound.f_start;
+	sound.a_current = sound.a_start;
+}
+
 
 
 void init_player_sprite() {
@@ -255,6 +288,7 @@ static void update_player_shot() {
 			sprite[SPRITE_PLAYER_SHOT].enable = FALSE;
 			enemies--;
 			sprite[i].idx = 5;
+			play_sound(NOISE, 440.0f, 0.99999f, 0.85f, 0.9995f);
 			timer[TIMER_CLEAR_EXPLOSIONS].t = 20;
 			timer[TIMER_CLEAR_EXPLOSIONS].callback = &clear_explosions;
 		}
@@ -300,6 +334,7 @@ static void return_shot() {
 	spr->idx = 4;
 }
 
+
 static void handle_inputs() {
 	if (joyport & LEFT && sprite[SPRITE_PLAYER].x > 0) {
 		sprite[SPRITE_PLAYER].x -= 1;
@@ -316,6 +351,8 @@ static void handle_inputs() {
 
 		timer[TIMER_RETURN_SHOT].t = 20;
 		timer[TIMER_RETURN_SHOT].callback = &return_shot;
+
+		play_sound(SQUARE, 440.0f, 0.99999f, 0.85f, 0.9995f);
 	}
 }
 
@@ -377,22 +414,24 @@ SDL_GameController *find_controller() {
 }
 
 
-#define PI2 6.28318530718
-static float duration = 0;
-static float freq = 440;
-
 void audio_callback(void *userdata, Uint8 *stream, int len)
 {
-	//printf("Audio callback %d\n", len);
-	short *snd = (short*)stream;
-	len /= sizeof(*snd);
-	for (int i = 0; i < len; i++)
+	float *buf = (float*)stream;
+	for (int i = 0; i < len/sizeof(*buf); i++)
 	{
-		snd[i] = 32000 * sin(duration);
-
-		duration += freq * PI2 / 48000.0;
-		if (duration >= PI2)
-			duration -= PI2;
+		if (sound.waveform == NONE) {
+			buf[i] = 0.0f;
+		} else if (sound.waveform == NOISE) {
+			buf[i] = sound.a_current * (float)rand() * 2.0 / (float)RAND_MAX - 1.0;
+		} else if (sound.waveform == SQUARE) {
+			const float period_samples = 48000.0 / sound.f_current;
+			const float remainder = fmod((double)sound.i, period_samples);
+			const float sign = (remainder < period_samples/2.0f) ? -1.0 : 1.0;
+			buf[i] = sound.a_current * sign;
+		}
+		sound.i++;
+		sound.a_current *= sound.a_decay;
+		sound.f_current *= sound.f_decay;
 	}
 }
 
@@ -439,7 +478,7 @@ extern int main(int argc, char** argv) {
 	SDL_AudioSpec spec, aspec;
 	SDL_zero(spec);
 	spec.freq = 48000;
-	spec.format = AUDIO_S16SYS;
+	spec.format = AUDIO_F32;
 	spec.channels = 1;
 	spec.samples = 4096;
 	spec.callback = audio_callback;
@@ -451,7 +490,7 @@ extern int main(int argc, char** argv) {
 		fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
 		exit(-1);
 	} else {
-		printf("%d %d (%d) %d %d\n", aspec.freq, aspec.format, AUDIO_S16SYS, aspec.channels, aspec.samples);
+		printf("%d %d (%d) %d %d\n", aspec.freq, aspec.format, AUDIO_F32, aspec.channels, aspec.samples);
 	}
 
 	/* Start playing, "unpause" */
