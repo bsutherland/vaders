@@ -248,7 +248,7 @@ static void update_enemies() {
 				}
 
 				if (advance) {
-					spr->y += 2;
+					spr->y += SPRITE_DIM;
 				} else {
 					spr->x += enemy_dir;
 				}
@@ -276,6 +276,10 @@ static void clear_explosions() {
 	}
 }
 
+static void play_explosion() {
+	play_sound(NOISE, 440.0f, 0.99999f, 0.85f, 0.9995f);
+}
+
 static void update_player_shot() {
 	Sprite_t* spr_player = &sprite[SPRITE_PLAYER_SHOT];
 	if (spr_player->y < SHOT_SPEED) {
@@ -288,7 +292,7 @@ static void update_player_shot() {
 			sprite[SPRITE_PLAYER_SHOT].enable = FALSE;
 			enemies--;
 			sprite[i].idx = 5;
-			play_sound(NOISE, 440.0f, 0.99999f, 0.85f, 0.9995f);
+			play_explosion();
 			timer[TIMER_CLEAR_EXPLOSIONS].t = 20;
 			timer[TIMER_CLEAR_EXPLOSIONS].callback = &clear_explosions;
 		}
@@ -317,9 +321,11 @@ static void update_enemy_shots() {
 	shot->y += SHOT_SPEED;
 
 	if (shot->enable && check_sprite_collision(SPRITE_ENEMY_RETURN_SHOT, SPRITE_PLAYER, 3, 5)) {
+		shot->enable = FALSE;
 		sprite[SPRITE_PLAYER].idx = 5;
 		timer[TIMER_RESTORE_PLAYER].t = 20;
 		timer[TIMER_RESTORE_PLAYER].callback = &init_player_sprite;
+		play_explosion();
 		lives--;
 	}
 }
