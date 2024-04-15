@@ -114,6 +114,7 @@ static Sprite_t sprite[N_SPRITES];
 #define SPRITE_PLAYER 63
 #define SPRITE_PLAYER_SHOT 62
 #define SPRITE_ENEMY_RETURN_SHOT 61
+#define SPRITE_ENEMY_RANDOM_SHOT 60
 #define SPRITE_LIVES N_ENEMIES
 
 #define SHOT_SPEED 4
@@ -129,7 +130,7 @@ static int lives;
 typedef unsigned int Tick_t;
 static Tick_t ticks;
 
-#define N_TIMERS 4
+#define N_TIMERS 5
 typedef struct {
 	Tick_t t;
 	void (*callback)();
@@ -139,6 +140,7 @@ static Timer_t timer[N_TIMERS];
 #define TIMER_CLEAR_EXPLOSIONS 1
 #define TIMER_RESTORE_PLAYER 2
 #define TIMER_MUSIC 3
+#define TIMER_RANDOM_SHOT 4
 
 static int enemies;
 static int enemy_dir;
@@ -146,7 +148,7 @@ static int enemy_dir;
 #define DIR_LEFT -2
 
 void init_timers() {
-	for (int i = 0; i < N_SPRITES; i++) {
+	for (int i = 0; i < N_TIMERS; i++) {
 		timer[i].t = 0;
 	}
 }
@@ -224,6 +226,33 @@ static void init_enemies() {
 	}
 }
 
+static void return_shot() {
+	Sprite_t *spr = &sprite[SPRITE_ENEMY_RETURN_SHOT];
+	spr->enable = TRUE;
+	int i = find_nearest_enemy_index();
+	spr->x = sprite[i].x;
+	spr->y = sprite[i].y + SPRITE_DIM;
+	spr->color = sprite[i].color;
+	spr->idx = 4;
+}
+
+
+static void random_shot() {
+	Sprite_t *spr = &sprite[SPRITE_ENEMY_RANDOM_SHOT];
+	spr->enable = TRUE;
+	int i = find_random_enemy_index();
+	spr->x = sprite[i].x;
+	spr->y = sprite[i].y + SPRITE_DIM;
+	spr->color = sprite[i].color;
+	spr->idx = 4;
+	timer[TIMER_RANDOM_SHOT].t = 255;
+}
+
+static void init_random_shots() {
+	timer[TIMER_RANDOM_SHOT].t = 255;
+	timer[TIMER_RANDOM_SHOT].callback = &random_shot;
+}
+
 
 static int music_idx;
 static const float MUSIC_FREQUENCIES[] = {
@@ -255,6 +284,7 @@ static void init_game() {
 	lives = 3;
 	init_player_sprite();
 	init_enemies();
+	init_random_shots();
 	init_music();
 }
 
@@ -355,36 +385,43 @@ static int find_nearest_enemy_index() {
 	return nearest_i;
 }
 
-static void update_enemy_shots() {
-	Sprite_t *shot = &sprite[SPRITE_ENEMY_RETURN_SHOT];
-	if (shot->y >= H - SHOT_SPEED) {
-		shot->enable = FALSE;
-	}
-	shot->y += SHOT_SPEED;
-
-	if (shot->enable && check_sprite_collision(SPRITE_ENEMY_RETURN_SHOT, SPRITE_PLAYER, 3, 5)) {
-		shot->enable = FALSE;
-		sprite[SPRITE_PLAYER].idx = 5;
-		play_explosion();
-		lives--;
-		if (lives > 0) {
-			timer[TIMER_RESTORE_PLAYER].t = 20;
-			timer[TIMER_RESTORE_PLAYER].callback = &init_player_sprite;
-		} else {
-			timer[TIMER_RESTORE_PLAYER].t = 20;
-			timer[TIMER_RESTORE_PLAYER].callback = &init_game;
+static int find_random_enemy_index() {
+	int i = rand() % enemies;
+	int k = 0;
+	for (int j = 0; j < N_ENEMIES; j++) {
+		if (sprite[j].enable) {
+			k++;
+		}
+		if (k == i) {
+			return j;
 		}
 	}
+	return -1;
 }
 
-static void return_shot() {
-	Sprite_t *spr = &sprite[SPRITE_ENEMY_RETURN_SHOT];
-	spr->enable = TRUE;
-	int i = find_nearest_enemy_index();
-	spr->x = sprite[i].x;
-	spr->y = sprite[i].y + SPRITE_DIM;
-	spr->color = sprite[i].color;
-	spr->idx = 4;
+
+static void update_enemy_shots() {
+	for (int i = SPRITE_ENEMY_RANDOM_SHOT; i <= SPRITE_ENEMY_RETURN_SHOT; i++) {
+		Sprite_t *shot = &sprite[i];
+		if (shot->y >= H - SHOT_SPEED) {
+			shot->enable = FALSE;
+		}
+		shot->y += SHOT_SPEED;
+
+		if (shot->enable && check_sprite_collision(i, SPRITE_PLAYER, 3, 5)) {
+			shot->enable = FALSE;
+			sprite[SPRITE_PLAYER].idx = 5;
+			play_explosion();
+			lives--;
+			if (lives > 0) {
+				timer[TIMER_RESTORE_PLAYER].t = 20;
+				timer[TIMER_RESTORE_PLAYER].callback = &init_player_sprite;
+			} else {
+				timer[TIMER_RESTORE_PLAYER].t = 20;
+				timer[TIMER_RESTORE_PLAYER].callback = &init_game;
+			}
+		}
+	}
 }
 
 
