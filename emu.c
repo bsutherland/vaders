@@ -292,7 +292,7 @@ static void clear_explosions() {
 }
 
 static void play_explosion() {
-	play_sound(NOISE, 440.0f, 0.99999f, 0.5f, 0.9995f);
+	play_sound(SQUARE, 440.0f, 1.0001f, 0.5f, 0.9995f);
 }
 
 static void update_player_shot() {
@@ -381,7 +381,7 @@ static void handle_inputs() {
 		timer[TIMER_RETURN_SHOT].t = 20;
 		timer[TIMER_RETURN_SHOT].callback = &return_shot;
 
-		play_sound(SQUARE, 440.0f, 0.99999f, 0.85f, 0.9995f);
+		play_sound(SQUARE, 440.0f, 0.99999f, 0.5f, 0.9995f);
 	}
 }
 
