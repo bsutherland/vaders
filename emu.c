@@ -138,6 +138,7 @@ static Timer_t timer[N_TIMERS];
 #define TIMER_RETURN_SHOT 0
 #define TIMER_CLEAR_EXPLOSIONS 1
 #define TIMER_RESTORE_PLAYER 2
+#define TIMER_MUSIC 3
 
 static int enemies;
 static int enemy_dir;
@@ -208,7 +209,7 @@ void init_player_sprite() {
 }
 
 
-void init_enemies() {
+static void init_enemies() {
 	enemies = ENEMY_ROWS * ENEMY_COLS;
 	enemy_dir = DIR_RIGHT;
 	for (uint8_t j = 0; j < ENEMY_ROWS; j++) {
@@ -224,6 +225,28 @@ void init_enemies() {
 }
 
 
+static int music_idx;
+static const float MUSIC_FREQUENCIES[] = {
+	73.42, // D
+	87.31, // F
+	82.41, // E
+	98.00, // G
+};
+
+void play_next_music_note() {
+	play_sound(SQUARE, MUSIC_FREQUENCIES[music_idx], 1.0f, 0.5f, 0.999f);
+	music_idx++;
+	music_idx %= 4;
+	timer[TIMER_MUSIC].t = enemies;
+}
+
+static void init_music() {
+	music_idx = 0;
+	timer[TIMER_MUSIC].t = enemies;
+	timer[TIMER_MUSIC].callback = &play_next_music_note;
+}
+
+
 static void init_game() {
 	ticks = 0;
 	init_timers();
@@ -232,6 +255,7 @@ static void init_game() {
 	lives = 3;
 	init_player_sprite();
 	init_enemies();
+	init_music();
 }
 
 static void update_enemies() {
