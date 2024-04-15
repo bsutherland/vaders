@@ -195,13 +195,20 @@ void init_player_sprite() {
 	player->y = H-8;
 	player->color = PLAYER_COLOR;
 	player->idx = 2;
+
+	Sprite_t* life = &sprite[SPRITE_LIVES];
+	for (int i = 0; i < 3; i++) {
+		life->enable = i < lives;
+		life->x = i * SPRITE_DIM * 2;
+		life->y = 0;
+		life->color = PLAYER_COLOR;
+		life->idx = 2;
+		life++;
+	}
 }
 
 
-void init() {
-	ticks = 0;
-	init_timers();
-
+void init_enemies() {
 	enemies = ENEMY_ROWS * ENEMY_COLS;
 	enemy_dir = DIR_RIGHT;
 	for (uint8_t j = 0; j < ENEMY_ROWS; j++) {
@@ -214,10 +221,18 @@ void init() {
 			spr->color = j*8+21;
 		}
 	}
-	lives = 3;
-	init_player_sprite();
 }
 
+
+static void init_game() {
+	ticks = 0;
+	init_timers();
+	init_palette();
+	init_sprites();
+	lives = 3;
+	init_player_sprite();
+	init_enemies();
+}
 
 static void update_enemies() {
 	// Speed up as # enemies decreases.
@@ -277,7 +292,7 @@ static void clear_explosions() {
 }
 
 static void play_explosion() {
-	play_sound(NOISE, 440.0f, 0.99999f, 0.85f, 0.9995f);
+	play_sound(NOISE, 440.0f, 0.99999f, 0.5f, 0.9995f);
 }
 
 static void update_player_shot() {
@@ -290,11 +305,14 @@ static void update_player_shot() {
 	for (int i = 0; i < N_ENEMIES; i++) {
 		if (sprite[i].enable && check_sprite_collision(SPRITE_PLAYER_SHOT, i, 3, 5)) {
 			sprite[SPRITE_PLAYER_SHOT].enable = FALSE;
-			enemies--;
 			sprite[i].idx = 5;
 			play_explosion();
 			timer[TIMER_CLEAR_EXPLOSIONS].t = 20;
 			timer[TIMER_CLEAR_EXPLOSIONS].callback = &clear_explosions;
+			enemies--;
+			if (enemies < 1) {
+				init_enemies();
+			}
 		}
 	}
 }
@@ -323,10 +341,15 @@ static void update_enemy_shots() {
 	if (shot->enable && check_sprite_collision(SPRITE_ENEMY_RETURN_SHOT, SPRITE_PLAYER, 3, 5)) {
 		shot->enable = FALSE;
 		sprite[SPRITE_PLAYER].idx = 5;
-		timer[TIMER_RESTORE_PLAYER].t = 20;
-		timer[TIMER_RESTORE_PLAYER].callback = &init_player_sprite;
 		play_explosion();
 		lives--;
+		if (lives > 0) {
+			timer[TIMER_RESTORE_PLAYER].t = 20;
+			timer[TIMER_RESTORE_PLAYER].callback = &init_player_sprite;
+		} else {
+			timer[TIMER_RESTORE_PLAYER].t = 20;
+			timer[TIMER_RESTORE_PLAYER].callback = &init_game;
+		}
 	}
 }
 
@@ -454,7 +477,7 @@ extern int main(int argc, char** argv) {
 		return 0;
 	}
 	window = SDL_CreateWindow(
-		"Fantasy console",
+		"Invader-like",
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 		WINDOW_W, WINDOW_H, SDL_WINDOW_SHOWN
 	);
@@ -495,16 +518,10 @@ extern int main(int argc, char** argv) {
 	{
 		fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
 		exit(-1);
-	} else {
-		printf("%d %d (%d) %d %d\n", aspec.freq, aspec.format, AUDIO_F32, aspec.channels, aspec.samples);
 	}
+	SDL_PauseAudioDevice(audio, 0);	// Start playing, "unpause"
 
-	/* Start playing, "unpause" */
-	SDL_PauseAudioDevice(audio, 0);
-
-	init_palette();
-	init_sprites();
-	init();
+	init_game();
 	SDL_Event e;
 	int quit = 0;
 	while (!quit) {
