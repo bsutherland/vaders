@@ -1,3 +1,7 @@
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -226,6 +230,36 @@ static void init_enemies() {
 	}
 }
 
+// find the enemy nearest the player for returning fire
+static int find_nearest_enemy_index() {
+	int nearest_i = -1;
+	int nearest_dx = 0xffff;
+	for (int i = 0; i < N_ENEMIES; i++) {
+		if (!sprite[i].enable) continue;
+		int dx = abs(sprite[i].x - sprite[SPRITE_PLAYER].x);
+		if (dx <= nearest_dx) {
+			nearest_dx = dx;
+			nearest_i = i;
+		}
+	}
+	return nearest_i;
+}
+
+// find a random enemy
+static int find_random_enemy_index() {
+	int i = rand() % enemies;
+	int k = 0;
+	for (int j = 0; j < N_ENEMIES; j++) {
+		if (sprite[j].enable) {
+			k++;
+		}
+		if (k == i) {
+			return j;
+		}
+	}
+	return -1;
+}
+
 static void return_shot() {
 	Sprite_t *spr = &sprite[SPRITE_ENEMY_RETURN_SHOT];
 	spr->enable = TRUE;
@@ -288,6 +322,7 @@ static void init_game() {
 	init_music();
 }
 
+
 static void update_enemies() {
 	// Speed up as # enemies decreases.
 	// In the original, only one enemy was moved per frame,
@@ -298,8 +333,12 @@ static void update_enemies() {
 		uint8_t xr = 0;
 		for (int i = 0 ; i < N_ENEMIES; i++) {
 			if (sprite[i].enable) {
-				xl = min(sprite[i].x, xl);
-				xr = max(sprite[i].x, xr);
+				if (sprite[i].x < xl) {
+					xl = sprite[i].x;
+				}
+				if (sprite[i].x > xr) {
+					xr = sprite[i].x;
+				}
 			}
 		}
 		if (enemy_dir == DIR_RIGHT && xr > (W - 2*SPRITE_DIM)) {
@@ -370,35 +409,6 @@ static void update_player_shot() {
 		}
 	}
 }
-
-static int find_nearest_enemy_index() {
-	int nearest_i = -1;
-	int nearest_dx = 0xffff;
-	for (int i = 0; i < N_ENEMIES; i++) {
-		if (!sprite[i].enable) continue;
-		int dx = abs(sprite[i].x - sprite[SPRITE_PLAYER].x);
-		if (dx <= nearest_dx) {
-			nearest_dx = dx;
-			nearest_i = i;
-		}
-	}
-	return nearest_i;
-}
-
-static int find_random_enemy_index() {
-	int i = rand() % enemies;
-	int k = 0;
-	for (int j = 0; j < N_ENEMIES; j++) {
-		if (sprite[j].enable) {
-			k++;
-		}
-		if (k == i) {
-			return j;
-		}
-	}
-	return -1;
-}
-
 
 static void update_enemy_shots() {
 	for (int i = SPRITE_ENEMY_RANDOM_SHOT; i <= SPRITE_ENEMY_RETURN_SHOT; i++) {
@@ -525,6 +535,10 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 	}
 }
 
+static void mainloop() {
+
+}
+
 // see https://benedicthenshaw.com/soft_render_sdl2.html
 // (how to do software rendering in SDL2)
 extern int main(int argc, char** argv) {
@@ -626,6 +640,7 @@ extern int main(int argc, char** argv) {
 		const float elapsed = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
 		printf("%2.2f FPS \r", 1.0f/elapsed);
 	}
+
 	SDL_FreeSurface(surface);
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
