@@ -535,18 +535,93 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 	}
 }
 
-static void mainloop() {
+static int quit;
 
+static SDL_Window* window;
+static SDL_Renderer* renderer;
+static SDL_Surface* surface;
+static SDL_Texture* texture;
+static SDL_GameController *controller;
+
+
+
+
+static void mainloop() {
+	SDL_Event e;
+	if (quit) {
+		SDL_FreeSurface(surface);
+		SDL_DestroyTexture(texture);
+		SDL_DestroyRenderer(renderer);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		#ifdef __EMSCRIPTEN__
+        emscripten_cancel_main_loop();  /* this should "kill" the app. */
+        #else
+        exit(0);
+        #endif
+	}
+	const uint64_t start = SDL_GetPerformanceCounter();
+	while (SDL_PollEvent(&e)) {
+		if (e.type == SDL_QUIT) {
+			quit = 1;
+			break;
+		};
+		switch (e.type) {
+			case SDL_CONTROLLERBUTTONDOWN:
+				switch (e.cbutton.button) {
+				case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+					joyport |= LEFT; break;
+				case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+					joyport |= RIGHT; break;
+				case SDL_CONTROLLER_BUTTON_A:
+					joyport |= BUTTON_A; break;
+				}
+				break;
+
+			case SDL_CONTROLLERBUTTONUP:
+				switch (e.cbutton.button) {
+				case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+					joyport &= ~LEFT; break;
+				case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+					joyport &= ~RIGHT; break;
+				case SDL_CONTROLLER_BUTTON_A:
+					joyport &= ~BUTTON_A; break;
+				}
+				break;
+
+			case SDL_CONTROLLERDEVICEADDED:
+                if (!controller) {
+                    controller = SDL_GameControllerOpen(e.cdevice.which);
+                }
+                break;
+
+            case SDL_CONTROLLERDEVICEREMOVED:
+                if (controller
+                	&& e.cdevice.which ==  SDL_JoystickInstanceID(
+                		SDL_GameControllerGetJoystick(controller)
+                	)) {
+                    SDL_GameControllerClose(controller);
+                    controller = find_controller();
+                }
+                break;
+        }
+	}
+	update();
+	memset(pixels_argb, 0, W*H*sizeof(uint32_t));
+	draw_sprites();
+
+	SDL_RenderClear(renderer);
+	SDL_UpdateTexture(texture, NULL, pixels_argb, W*4);
+	SDL_RenderCopy(renderer, texture, 0, 0);
+	SDL_RenderPresent(renderer);
+
+	const uint64_t end = SDL_GetPerformanceCounter();
+	const float elapsed = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
+	printf("%2.2f FPS \r", 1.0f/elapsed);
 }
 
-// see https://benedicthenshaw.com/soft_render_sdl2.html
-// (how to do software rendering in SDL2)
-extern int main(int argc, char** argv) {
-	SDL_Window* window = 0;
-	SDL_Renderer* renderer = 0;
-	SDL_Surface* surface = 0;
-	SDL_Texture* texture = 0;
 
+extern int main(int argc, char** argv) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) < 0) {
 		printf("Failed to initalize SDL: %s\n", SDL_GetError());
 		return 0;
@@ -577,7 +652,7 @@ extern int main(int argc, char** argv) {
 		printf("Failed to enable game controller events: %s\n", SDL_GetError());
 		return 0;
 	}
-	SDL_GameController *controller = find_controller();
+	controller = find_controller();
 
 	SDL_AudioSpec spec, aspec;
 	SDL_zero(spec);
@@ -597,54 +672,13 @@ extern int main(int argc, char** argv) {
 	SDL_PauseAudioDevice(audio, 0);	// Start playing, "unpause"
 
 	init_game();
-	SDL_Event e;
-	int quit = 0;
-	while (!quit) {
-		const uint64_t start = SDL_GetPerformanceCounter();
-		while (SDL_PollEvent(&e)) {
-			if (e.type == SDL_QUIT) {
-				quit = 1;
-				break;
-			};
-			if (e.type == SDL_CONTROLLERBUTTONDOWN) {
-				switch (e.cbutton.button) {
-				case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-					joyport |= LEFT; break;
-				case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-					joyport |= RIGHT; break;
-				case SDL_CONTROLLER_BUTTON_A:
-					joyport |= BUTTON_A; break;
-				}
-			}
-			if (e.type == SDL_CONTROLLERBUTTONUP) {
-				switch (e.cbutton.button) {
-				case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-					joyport &= ~LEFT; break;
-				case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-					joyport &= ~RIGHT; break;
-				case SDL_CONTROLLER_BUTTON_A:
-					joyport &= ~BUTTON_A; break;
-				}
-			}
-		}
-		update();
-		memset(pixels_argb, 0, W*H*sizeof(uint32_t));
-		draw_sprites();
 
-		SDL_RenderClear(renderer);
-		SDL_UpdateTexture(texture, NULL, pixels_argb, W*4);
-		SDL_RenderCopy(renderer, texture, 0, 0);
-		SDL_RenderPresent(renderer);
+	quit = 0;
+	#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(mainloop, 0, 1);
+    #else
+    while (1) { mainloop(); }
+    #endif
 
-		const uint64_t end = SDL_GetPerformanceCounter();
-		const float elapsed = (float)(end - start) / (float)SDL_GetPerformanceFrequency();
-		printf("%2.2f FPS \r", 1.0f/elapsed);
-	}
-
-	SDL_FreeSurface(surface);
-	SDL_DestroyTexture(texture);
-	SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
-	SDL_Quit();
 	return 0;
 }

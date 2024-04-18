@@ -1,0 +1,1 @@
+emcc -sUSE_SDL=2 emu.c -o emu.html -sSINGLE_FILE
