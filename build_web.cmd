@@ -1,1 +1,1 @@
-emcc -sUSE_SDL=2 vaders.c -o vaders.html -sSINGLE_FILE
+emcc -Os -sUSE_SDL=2 vaders.c -o vaders.html -sSINGLE_FILE
